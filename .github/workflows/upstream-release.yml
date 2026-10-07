@@ -104,7 +104,8 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: bash .github/scripts/build_release.sh "$TARGET"
-      - uses: actions/upload-artifact@v4
+      # Use artifact actions with a native Node.js 24 runtime.
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: |
@@ -118,7 +119,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
