@@ -1,0 +1,156 @@
+name: Sync MoneroOcean and release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [moneroocean]
+    paths:
+      - '.github/workflows/upstream-release.yml'
+      - '.github/scripts/**'
+      - 'src/donate.h'
+      - 'src/config.json'
+      - 'src/core/config/Config_default.h'
+      - 'src/core/config/usage.h'
+
+# Serialize sync and publication so scheduled and manual runs cannot race.
+concurrency:
+  group: moneroocean-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: github.ref_name == 'moneroocean'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      build: ${{ steps.sync.outputs.build }}
+      source_sha: ${{ steps.sync.outputs.source_sha }}
+      upstream_sha: ${{ steps.sync.outputs.upstream_sha }}
+      tag: ${{ steps.sync.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: moneroocean
+          fetch-depth: 0
+      - name: Merge upstream and reapply zero donation
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BRANCH: moneroocean
+        run: bash .github/scripts/sync_upstream.sh
+
+  build:
+    needs: sync
+    if: needs.sync.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: windows-x86-64-v3
+          - runner: ubuntu-latest
+            target: linux-x86-64-v3
+          - runner: macos-latest
+            target: macos-arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.sync.outputs.source_sha }}
+          persist-credentials: false
+      - name: Set up Windows GCC with the exact x86-64-v3 flag
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            zip
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-binutils
+      - name: Fetch upstream Windows static dependencies
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v6
+        with:
+          repository: xmrig/xmrig-deps
+          path: deps
+          persist-credentials: false
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake automake autoconf libtool pkg-config wget
+      - name: Install macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install cmake wget automake libtool autoconf
+      - name: Build and verify Windows package
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: bash .github/scripts/build_release.sh "$TARGET"
+      - name: Build and verify Unix package
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: bash .github/scripts/build_release.sh "$TARGET"
+      # Use artifact actions with a native Node.js 24 runtime.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [sync, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish all three packages together
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.sync.outputs.tag }}
+          SOURCE_SHA: ${{ needs.sync.outputs.source_sha }}
+          UPSTREAM_SHA: ${{ needs.sync.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          cd dist
+          test -f xmrig-windows-x86-64-v3.zip
+          test -f xmrig-linux-x86-64-v3.tar.gz
+          test -f xmrig-macos-arm64.tar.gz
+          sha256sum *.zip *.tar.gz > SHA256SUMS
+          cat > release-notes.md <<EOF
+          Automated zero-donation build of MoneroOcean/xmrig master.
+
+          Upstream commit: https://github.com/MoneroOcean/xmrig/commit/$UPSTREAM_SHA
+          Patched source: https://github.com/$GH_REPO/commit/$SOURCE_SHA
+
+          Default and minimum donation levels are 0; bundled config defaults to 0.
+          Windows and Linux require an x86-64-v3 capable CPU and use -march=x86-64-v3.
+          macOS targets Apple Silicon (ARM64). Packages use the latest GitHub-hosted OS images.
+          Linux is statically linked; macOS links only system libraries.
+          Source archives are available with this release; see LICENSE for GPLv3 terms.
+          EOF
+          # Keep partial uploads in a draft so the next run can recover them.
+          releases=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name')
+          if ! printf '%s\n' "$releases" | grep -Fxq "$TAG"; then
+            gh release create "$TAG" --target "$SOURCE_SHA" --title "$TAG" --draft --notes-file release-notes.md
+          fi
+          gh release upload "$TAG" *.zip *.tar.gz SHA256SUMS --clobber
+          gh release edit "$TAG" --draft=false --latest=false --notes-file release-notes.md
