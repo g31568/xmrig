@@ -20,7 +20,7 @@ def patch(root: Path) -> None:
             (r"(reader.getInt\(kDonateOverProxy,\s*)PROXY_DONATE_\w+", r"\g<1>PROXY_DONATE_NONE"),
         ],
         "src/core/config/usage.h": [
-            (r'(--donate-level=N\s+donate level, default )[^"\\]*', r"\g<1>0%"),
+            (r'(--donate-level=N\s+donate level, default )[^"\\]*', r"\g<1>0% (0 minute in 100 minutes)"),
         ],
     }
     patched = {}
