@@ -73,7 +73,7 @@ static inline const std::string &usage()
     u += "  -R, --retry-pause=N           time to pause between retries (default: 5)\n";
     u += "      --user-agent              set custom user-agent string for pool\n";
     // Keep the advertised default aligned with this fork's donation setting.
-    u += "      --donate-level=N          donate level, default 0%\n";
+    u += "      --donate-level=N          donate level, default 0% (0 minute in 100 minutes)\n";
     u += "      --donate-over-proxy=N     control donate over xmrig-proxy feature\n";
 
     u += "\nCPU backend:\n";

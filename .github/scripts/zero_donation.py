@@ -14,7 +14,7 @@ def patch(root: Path) -> None:
         "src/config.json": [(r'("donate-level"\s*:\s*)\d+', r"\g<1>0")],
         "src/core/config/Config_default.h": [(r'("donate-level"\s*:\s*)\d+', r"\g<1>0")],
         "src/core/config/usage.h": [
-            (r'(--donate-level=N\s+donate level, default )[^"\\]*', r"\g<1>0%"),
+            (r'(--donate-level=N\s+donate level, default )[^"\\]*', r"\g<1>0% (0 minute in 100 minutes)"),
         ],
     }
     patched = {}
