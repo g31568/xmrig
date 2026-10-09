@@ -1,0 +1,25 @@
+name: Schedule MoneroOcean release
+
+on:
+  schedule:
+    - cron: '27 3 * * *'
+  workflow_dispatch:
+
+# GitHub schedules run only on the default branch; dispatch the fork branch explicitly.
+permissions:
+  actions: write
+
+concurrency:
+  group: moneroocean-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start MoneroOcean sync and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run upstream-release.yml --ref moneroocean
