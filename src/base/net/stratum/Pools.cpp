@@ -164,7 +164,8 @@ void xmrig::Pools::load(const IJsonReader &reader)
     if (mo) m_donateLevel = 0; else
     // End MoneroOcean
     setDonateLevel(reader.getInt(kDonateLevel, kDefaultDonateLevel));
-    setProxyDonate(reader.getInt(kDonateOverProxy, PROXY_DONATE_AUTO));
+    // Keep omitted settings consistent with the fork's donation defaults.
+    setProxyDonate(reader.getInt(kDonateOverProxy, PROXY_DONATE_NONE));
     setRetries(reader.getInt(kRetries));
     setRetryPause(reader.getInt(kRetryPause));
 }

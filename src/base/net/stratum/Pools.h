@@ -90,7 +90,7 @@ private:
     int m_donateLevel;
     int m_retries               = 5;
     int m_retryPause            = 5;
-    ProxyDonate m_proxyDonate   = PROXY_DONATE_AUTO;
+    ProxyDonate m_proxyDonate   = PROXY_DONATE_NONE; // Disable proxy donations by default.
     std::vector<Pool> m_data;
 
 #   ifdef XMRIG_FEATURE_BENCHMARK

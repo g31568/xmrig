@@ -55,6 +55,10 @@ void MoBenchmark::finish() {
         if (algo_perf[algo] == 0.0f) algo_perf[algo] = get_algo_perf(algo);
     }
     LOG_INFO("%s " BRIGHT_BLACK_BG(CYAN_BOLD_S " ALGO PERFORMANCE CALIBRATION COMPLETE "), Tags::benchmark());
+    // Persist completed measurements so the next launch can skip calibration.
+    if (m_controller->config()->isShouldSave() && !m_controller->config()->save()) {
+        LOG_WARN("%s " YELLOW("Cannot save calibration; use --config with a writable config file"), Tags::benchmark());
+    }
     m_controller->miner()->pause(); // do not compute anything before job from the pool
     JobResults::stop();
     JobResults::setListener(m_controller->network(), m_controller->config()->cpu().isHwAES());
